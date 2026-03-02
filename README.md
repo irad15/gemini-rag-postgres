@@ -4,7 +4,7 @@ This repository contains a Python module (`index_documents.py`) built to ingest 
 
 ## Prerequisites
 - Python 3.9+ 
-- Docker and Docker Compose (Optional, but recommended for local database setup)
+- Docker and Docker Compose (**OPTIONAL**, but recommended for local database setup)
 
 ## Database Setup
 
@@ -13,10 +13,10 @@ This project requires a PostgreSQL database with the **pgvector** extension inst
 ### Option A: Local Docker Setup (Recommended)
 You can quickly spin up a pre-configured PostgreSQL instance using the provided `docker-compose.yml` file.
 
-1. Ensure Docker Desktop (or equivalent) is running.
+1. Ensure you have Docker installed and running on your machine (Docker Desktop or equivalent).
 2. In the terminal, navigate to the project directory and run:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 This will start the database in the background on `localhost:5432`.
 
@@ -52,12 +52,14 @@ pip install -r requirements.txt
 
 Run the main script from the command line, providing the path to the document you wish to process.
 
-**Basic Execution (Defaults to Paragraph-based Splitting):**
+**Basic Execution (Defaults to Sentence-based Splitting):**
 ```bash
 python index_documents.py "path/to/your/document.pdf"
 ```
 
 > **Note:** Every time you run the command above, the script will automatically clear the existing `document_chunks` database table and insert only the new data from the document you just processed. It does not accumulate documents!
+
+> **API Limit Warning:** We recommend processing smaller documents (around 1-2 pages) to avoid hitting the `gemini-embedding-001` model's rate limits (429 Too Many Requests).
 
 **Specifying a Chunking Strategy:**
 You can optionally define how the text should be split using the `--strategy` flag. The available options are `fixed`, `sentence`, or `paragraph`.
