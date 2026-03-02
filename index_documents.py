@@ -37,14 +37,9 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Check standard naming or specific
 POSTGRES_URL = os.getenv("POSTGRES_URL")
 EMBEDDING_MODEL = "gemini-embedding-001"
 
-client = None
-if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
-else:
-    logger.warning("GEMINI_API_KEY not found in environment variables. Embedding will fail.")
-
-if not POSTGRES_URL:
-    logger.warning("POSTGRES_URL not found in environment variables. Database operations will fail.")
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+if not client: logger.warning("GEMINI_API_KEY not found in environment variables. Embedding will fail.")
+if not POSTGRES_URL: logger.warning("POSTGRES_URL not found in environment variables. Database operations will fail.")
 
 
 # ==============================================================================
@@ -90,16 +85,10 @@ def extract_text(file_path: str) -> str:
 
 def chunk_fixed_size(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
     """Splits text into fixed-size chunks with overlap."""
-    chunks = []
-    start = 0
-    text_length = len(text)
-    
-    while start < text_length:
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start += (chunk_size - overlap)
-        
+    chunks, start = [], 0
+    while start < len(text):
+        chunks.append(text[start:start + chunk_size])
+        start += chunk_size - overlap
     return chunks
 
 def chunk_sentences(text: str) -> List[str]:
@@ -118,14 +107,9 @@ def chunk_text(text: str, strategy: str) -> List[str]:
     """Routes text to the appropriate chunking strategy."""
     logger.info(f"✂️  Applying chunking strategy: {strategy}")
     
-    if strategy == "fixed":
-        chunks = chunk_fixed_size(text)
-    elif strategy == "sentence":
-        chunks = chunk_sentences(text)
-    elif strategy == "paragraph":
-        chunks = chunk_paragraphs(text)
-    else:
-        raise ValueError(f"Unknown chunking strategy: {strategy}")
+    strategies = {"fixed": chunk_fixed_size, "sentence": chunk_sentences, "paragraph": chunk_paragraphs}
+    if strategy not in strategies: raise ValueError(f"Unknown chunking strategy: {strategy}")
+    chunks = strategies[strategy](text)
         
     logger.info(f"🧩 Created {len(chunks)} chunks.")
     return chunks
@@ -182,7 +166,7 @@ def setup_database(conn: pg_conn) -> None:
                     chunk_text TEXT NOT NULL,
                     strategy_split VARCHAR(50) NOT NULL,
                     embedding VECTOR(3072),
-                    at_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    at_created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 );
             """)
         conn.commit()
@@ -258,7 +242,9 @@ def process_document(file_path: str, strategy: str) -> None:
     logger.info(f"🔌 Connecting to database at {POSTGRES_URL.split('@')[-1]}...") # Don't log credentials
     conn = None
     try:
+        # Establish database connection
         conn = psycopg2.connect(POSTGRES_URL)
+        # Ensure database schema is ready
         setup_database(conn)
         save_to_database(conn, filename, chunks, embeddings, strategy)
     except psycopg2.Error as e:
