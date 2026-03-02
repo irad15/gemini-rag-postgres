@@ -21,9 +21,13 @@ from dotenv import load_dotenv
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Suppress verbose HTTP request logs from underlying libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 # Load environment variables
 load_dotenv()
@@ -72,7 +76,7 @@ def extract_text(file_path: str) -> str:
             
         # Basic cleanup: remove excessive whitespace
         text = re.sub(r'\n{3,}', '\n\n', text).strip()
-        logger.info(f"Successfully extracted {len(text)} characters from {path.name}")
+        logger.info(f"📄 Successfully extracted {len(text)} characters from {path.name}")
         return text
 
     except Exception as e:
@@ -112,7 +116,7 @@ def chunk_paragraphs(text: str) -> List[str]:
 
 def chunk_text(text: str, strategy: str) -> List[str]:
     """Routes text to the appropriate chunking strategy."""
-    logger.info(f"Applying chunking strategy: {strategy}")
+    logger.info(f"✂️  Applying chunking strategy: {strategy}")
     
     if strategy == "fixed":
         chunks = chunk_fixed_size(text)
@@ -123,7 +127,7 @@ def chunk_text(text: str, strategy: str) -> List[str]:
     else:
         raise ValueError(f"Unknown chunking strategy: {strategy}")
         
-    logger.info(f"Created {len(chunks)} chunks.")
+    logger.info(f"🧩 Created {len(chunks)} chunks.")
     return chunks
 
 
@@ -133,7 +137,7 @@ def chunk_text(text: str, strategy: str) -> List[str]:
 
 def generate_embeddings(chunks: List[str]) -> List[List[float]]:
     """Generates vector embeddings for a list of text chunks using Gemini."""
-    logger.info(f"Generating embeddings for {len(chunks)} chunks using {EMBEDDING_MODEL}...")
+    logger.info(f"🧠 Generating embeddings for {len(chunks)} chunks using {EMBEDDING_MODEL}...")
     embeddings = []
     
     # Process in batches or one by one. Google's API can handle multiple, 
@@ -147,9 +151,9 @@ def generate_embeddings(chunks: List[str]) -> List[List[float]]:
             embeddings.append(response.embeddings[0].values)
             
             if (i + 1) % 10 == 0:
-                logger.info(f"Processed {i + 1}/{len(chunks)} embeddings...")
+                logger.info(f"⏳ Processed {i + 1}/{len(chunks)} embeddings...")
                 
-        logger.info("Successfully generated all embeddings.")
+        logger.info(f"✅ Successfully generated {len(embeddings)} embeddings.")
         return embeddings
         
     except Exception as e:
@@ -165,18 +169,19 @@ def setup_database(conn: pg_conn) -> None:
     """Ensures the pgvector extension and necessary table exist."""
     try:
         with conn.cursor() as cur:
-            logger.info("Setting up database schema...")
+            logger.info("🏗️  Setting up database schema...")
             # Ensure pgvector extension is enabled
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
             
-            # The embedding dimension depends on the model. gemini-embedding-001 is 768.
+            # The embedding dimension depends on the model. gemini-embedding-001 produces 3072 dimensions.
+            cur.execute("DROP TABLE IF EXISTS document_chunks;")
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS document_chunks (
+                CREATE TABLE document_chunks (
                     id SERIAL PRIMARY KEY,
                     filename VARCHAR(255) NOT NULL,
                     chunk_text TEXT NOT NULL,
                     strategy_split VARCHAR(50) NOT NULL,
-                    embedding VECTOR(768),
+                    embedding VECTOR(3072),
                     at_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
@@ -194,7 +199,7 @@ def save_to_database(
     strategy: str
 ) -> None:
     """Saves the text chunks and their embeddings to the PostgreSQL database."""
-    logger.info(f"Saving {len(chunks)} records to database...")
+    logger.info(f"💾 Saving {len(chunks)} records to database...")
     
     if len(chunks) != len(embeddings):
         raise ValueError("Mismatch between number of chunks and embeddings")
@@ -214,7 +219,7 @@ def save_to_database(
                     (filename, chunk, strategy, emb)
                 )
         conn.commit()
-        logger.info("Successfully saved all records to database.")
+        logger.info("✅ Successfully saved all records to database.")
     except Exception as e:
         conn.rollback()
         logger.error(f"Failed to save records to database: {e}")
@@ -228,10 +233,10 @@ def save_to_database(
 def process_document(file_path: str, strategy: str) -> None:
     """Orchestrates the entire ingestion and vectorization pipeline."""
     if not GEMINI_API_KEY or not POSTGRES_URL:
-        logger.error("Missing required environment variables. Aborting.")
+        logger.error("❌ Missing required environment variables. Aborting.")
         return
 
-    logger.info("=== Starting Document Ingestion Pipeline ===")
+    logger.info("🚀 === Starting Document Ingestion Pipeline ===")
     filename = Path(file_path).name
     
     # 1. Extract Text
@@ -250,20 +255,20 @@ def process_document(file_path: str, strategy: str) -> None:
     embeddings = generate_embeddings(chunks)
 
     # 4. Save to Database
-    logger.info(f"Connecting to database at {POSTGRES_URL.split('@')[-1]}...") # Don't log credentials
+    logger.info(f"🔌 Connecting to database at {POSTGRES_URL.split('@')[-1]}...") # Don't log credentials
     conn = None
     try:
         conn = psycopg2.connect(POSTGRES_URL)
         setup_database(conn)
         save_to_database(conn, filename, chunks, embeddings, strategy)
     except psycopg2.Error as e:
-        logger.error(f"Database connection error: {e}")
+        logger.error(f"❌ Database connection error: {e}")
     finally:
         if conn:
             conn.close()
-            logger.info("Database connection closed.")
+            logger.info("🔒 Database connection closed.")
             
-    logger.info("=== Pipeline Execution Complete ===")
+    logger.info("🎉 === Pipeline Execution Complete ===")
 
 
 if __name__ == "__main__":
@@ -279,8 +284,8 @@ if __name__ == "__main__":
         "--strategy", 
         type=str, 
         choices=["fixed", "sentence", "paragraph"], 
-        default="paragraph",
-        help="The chunking strategy to apply (default: paragraph)"
+        default="sentence",
+        help="The chunking strategy to apply (default: sentence)"
     )
 
     args = parser.parse_args()

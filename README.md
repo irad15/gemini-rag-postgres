@@ -35,7 +35,7 @@ Ensure you create a `.env` file in the root of the project with the following tw
 **Option 1: Using `uv` (Recommended - Blazing Fast)**
 If you have [uv](https://github.com/astral-sh/uv) installed, you can create the environment and install dependencies in seconds:
 ```bash
-uv venv
+uv venv --python 3.12
 source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
 uv pip install -r requirements.txt
 ```
@@ -54,18 +54,20 @@ Run the main script from the command line, providing the path to the document yo
 
 **Basic Execution (Defaults to Paragraph-based Splitting):**
 ```bash
-python index_documents.py path/to/your/document.pdf
+python index_documents.py "path/to/your/document.pdf"
 ```
+
+> **Note:** Every time you run the command above, the script will automatically clear the existing `document_chunks` database table and insert only the new data from the document you just processed. It does not accumulate documents!
 
 **Specifying a Chunking Strategy:**
 You can optionally define how the text should be split using the `--strategy` flag. The available options are `fixed`, `sentence`, or `paragraph`.
 
 ```bash
 # Split into fixed-size chunks (1000 chars with 200 char overlap)
-python index_documents.py path/to/your/document.docx --strategy fixed
+python index_documents.py "path/to/your/document.docx" --strategy fixed
 
 # Split by sentences
-python index_documents.py path/to/your/document.pdf --strategy sentence
+python index_documents.py "path/to/your/document.pdf" --strategy sentence
 ```
 
 ## Architecture Notes
