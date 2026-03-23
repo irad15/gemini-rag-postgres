@@ -164,9 +164,9 @@ def setup_database(conn: pg_conn) -> None:
                     id SERIAL PRIMARY KEY,
                     filename VARCHAR(255) NOT NULL,
                     chunk_text TEXT NOT NULL,
-                    strategy_split VARCHAR(50) NOT NULL,
+                    split_strategy VARCHAR(50) NOT NULL,
                     embedding VECTOR(3072),
-                    at_created TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 );
             """)
         conn.commit()
@@ -197,7 +197,7 @@ def save_to_database(
                 cur.execute(
                     """
                     INSERT INTO document_chunks 
-                    (filename, chunk_text, strategy_split, embedding) 
+                    (filename, chunk_text, split_strategy, embedding) 
                     VALUES (%s, %s, %s, %s)
                     """,
                     (filename, chunk, strategy, emb)
